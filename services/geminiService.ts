@@ -2,6 +2,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ResumeData } from "../types";
 
+// Always use process.env.API_KEY directly for initialization as per guidelines
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 
 const RESUME_SCHEMA = {
@@ -117,17 +118,20 @@ export const parseResumeFromPDF = async (base64PDF: string): Promise<Partial<Res
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [
-        {
-          inlineData: {
-            mimeType: "application/pdf",
-            data: base64PDF
+      // Multi-part contents must be wrapped in a Content object with a parts array
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType: "application/pdf",
+              data: base64PDF
+            }
+          },
+          {
+            text: "Quickly extract resume data from this PDF into the specified JSON format."
           }
-        },
-        {
-          text: "Quickly extract resume data from this PDF into the specified JSON format."
-        }
-      ],
+        ]
+      },
       config: {
         thinkingConfig: { thinkingBudget: 0 }, // Critical for speed: disable reasoning for extraction
         responseMimeType: "application/json",
@@ -159,9 +163,14 @@ export const generateHeroImage = async (prompt: string): Promise<string | null> 
       }
     });
 
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
+    // Iterate through candidates and parts to find the image part
+    const candidate = response.candidates?.[0];
+    if (candidate?.content?.parts) {
+      for (const part of candidate.content.parts) {
+        if (part.inlineData) {
+          const base64EncodeString: string = part.inlineData.data;
+          return `data:image/png;base64,${base64EncodeString}`;
+        }
       }
     }
     return null;

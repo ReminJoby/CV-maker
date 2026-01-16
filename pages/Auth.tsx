@@ -1,14 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Layout, Mail, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
+import { Layout, Mail, Lock, User, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 import { useApp } from '../App';
-
-interface StoredUser {
-  id: string;
-  email: string;
-  fullName: string;
-  password: string;
-}
+import { syncService } from '../services/syncService';
 
 const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -16,54 +10,64 @@ const Auth: React.FC = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const { login } = useApp();
 
-  // Reset error when switching between login and register
   useEffect(() => {
     setError(null);
   }, [isLogin]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsLoading(true);
 
-    // Get existing users from localStorage
-    const storedUsersJson = localStorage.getItem('opal_users');
-    const users: StoredUser[] = storedUsersJson ? JSON.parse(storedUsersJson) : [];
-
-    if (isLogin) {
-      // Login Logic
-      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-      
-      if (user && user.password === password) {
-        // Success
-        login({ id: user.id, email: user.email, fullName: user.fullName }, 'mock-jwt-token');
+    try {
+      if (isLogin) {
+        // Global Login Logic
+        const cloudUser = await syncService.getUser(email);
+        
+        if (cloudUser && cloudUser.password === password) {
+          // Success: Fetch their cloud resumes too
+          const cloudResumes = await syncService.getResumes(email);
+          login(
+            { id: cloudUser.id, email: cloudUser.email, fullName: cloudUser.fullName }, 
+            'mock-jwt-token',
+            cloudResumes
+          );
+        } else {
+          // Failure
+          setError("The entered password or email is incorrect. Please try again.");
+        }
       } else {
-        // Failure
-        setError("The entered password or email is incorrect. Please try again.");
+        // Global Registration Logic
+        const existingUser = await syncService.getUser(email);
+        
+        if (existingUser) {
+          setError("An account with this email already exists.");
+          setIsLoading(false);
+          return;
+        }
+
+        const newUser = {
+          id: Math.random().toString(36).substring(2, 9),
+          email: email.toLowerCase(),
+          fullName: fullName || 'New User'
+        };
+
+        // Save to Global Store
+        const success = await syncService.saveUser(newUser, password);
+        
+        if (success) {
+          login(newUser, 'mock-jwt-token', []);
+        } else {
+          setError("Sync failed. Please check your connection and try again.");
+        }
       }
-    } else {
-      // Registration Logic
-      const existingUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-      
-      if (existingUser) {
-        setError("An account with this email already exists.");
-        return;
-      }
-
-      const newUser: StoredUser = {
-        id: Math.random().toString(36).substring(2, 9),
-        email,
-        fullName: fullName || 'New User',
-        password
-      };
-
-      // Save to "DB"
-      const updatedUsers = [...users, newUser];
-      localStorage.setItem('opal_users', JSON.stringify(updatedUsers));
-
-      // Log in immediately
-      login({ id: newUser.id, email: newUser.email, fullName: newUser.fullName }, 'mock-jwt-token');
+    } catch (err) {
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -75,18 +79,20 @@ const Auth: React.FC = () => {
             <Layout className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-slate-800">Opal CV Studio</h1>
-          <p className="text-slate-500 mt-2">Design a future you're proud of</p>
+          <p className="text-slate-500 mt-2 tracking-wide uppercase text-[10px] font-black">Sync-Enabled Professional Suite</p>
         </div>
 
         <div className="bg-white rounded-3xl shadow-xl p-8 border border-slate-100">
           <div className="flex bg-slate-100 p-1 rounded-xl mb-8">
             <button 
+              disabled={isLoading}
               onClick={() => setIsLogin(true)}
               className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${isLogin ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Login
             </button>
             <button 
+              disabled={isLoading}
               onClick={() => setIsLogin(false)}
               className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${!isLogin ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
@@ -112,7 +118,8 @@ const Auth: React.FC = () => {
                   <input 
                     type="text"
                     required
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:bg-white transition-all"
+                    disabled={isLoading}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:bg-white transition-all disabled:opacity-50"
                     placeholder="Enter your name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
@@ -128,7 +135,8 @@ const Auth: React.FC = () => {
                 <input 
                   type="email"
                   required
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:bg-white transition-all"
+                  disabled={isLoading}
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:bg-white transition-all disabled:opacity-50"
                   placeholder="name@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -143,7 +151,8 @@ const Auth: React.FC = () => {
                 <input 
                   type="password"
                   required
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:bg-white transition-all"
+                  disabled={isLoading}
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:bg-white transition-all disabled:opacity-50"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -153,16 +162,23 @@ const Auth: React.FC = () => {
 
             <button 
               type="submit"
-              className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold flex items-center justify-center space-x-2 transition-all shadow-lg shadow-indigo-200 hover:scale-[1.02] active:scale-[0.98]"
+              disabled={isLoading}
+              className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold flex items-center justify-center space-x-2 transition-all shadow-lg shadow-indigo-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
             >
-              <span>{isLogin ? 'Sign In' : 'Create Account'}</span>
-              <ArrowRight className="w-5 h-5" />
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <span>{isLogin ? 'Sign In Globally' : 'Create Global Account'}</span>
+                  <ArrowRight className="w-5 h-5" />
+                </>
+              )}
             </button>
           </form>
 
           <div className="mt-8 pt-8 border-t border-slate-100 text-center">
-            <p className="text-sm text-slate-500 italic">
-              "The best way to predict the future is to create it."
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+              Data is synced across all devices
             </p>
           </div>
         </div>
