@@ -1,21 +1,69 @@
 
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
-import { Briefcase, Layout, Plus, FileText, User as UserIcon, LogOut, ChevronRight, CloudCheck, CloudOff, RefreshCw } from 'lucide-react';
+import { Briefcase, Layout, Plus, FileText, User as UserIcon, LogOut, ChevronRight } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import CVBuilder from './pages/CVBuilder';
 import Auth from './pages/Auth';
 import { ResumeData, User, AuthState } from './types';
-import { syncService } from './services/syncService';
+
+// Mock DB Initial Data
+const INITIAL_CV_LIST: ResumeData[] = [
+  {
+    id: '1',
+    title: 'Senior Frontend Engineer',
+    lastModified: Date.now() - 3600000,
+    template: 'modern',
+    personalInfo: {
+      fullName: 'Alex River',
+      email: 'alex.river@example.com',
+      phone: '+1 (555) 012-3456',
+      location: 'San Francisco, CA',
+      website: 'alexriver.dev',
+      summary: 'Innovative Frontend Developer with 6+ years of experience building scalable web applications. Expert in React, TypeScript, and modern UI/UX principles.'
+    },
+    experience: [
+      {
+        id: 'e1',
+        company: 'TechFlow Solutions',
+        position: 'Senior React Developer',
+        location: 'Remote',
+        startDate: '2021-01',
+        endDate: '',
+        current: true,
+        description: 'Led the development of a micro-frontend architecture using React and Module Federation. Improved application performance by 40% through code-splitting and optimization.'
+      }
+    ],
+    education: [
+      {
+        id: 'ed1',
+        school: 'Stanford University',
+        degree: 'Bachelor of Science',
+        field: 'Computer Science',
+        location: 'Stanford, CA',
+        startDate: '2014-09',
+        endDate: '2018-06',
+        gpa: '3.9'
+      }
+    ],
+    skills: [
+      { id: 's1', name: 'React', level: 5 },
+      { id: 's2', name: 'TypeScript', level: 5 },
+      { id: 's3', name: 'Tailwind CSS', level: 4 }
+    ],
+    projects: [
+      { id: 'p1', name: 'Opal UI Kit', description: 'A highly accessible React component library used by 50+ internal teams.' }
+    ]
+  }
+];
 
 interface AppContextType {
   auth: AuthState;
-  login: (user: User, token: string, cloudResumes?: ResumeData[]) => void;
+  login: (user: User, token: string) => void;
   logout: () => void;
   resumes: ResumeData[];
   saveResume: (resume: ResumeData) => void;
   deleteResume: (id: string) => void;
-  isSyncing: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -27,64 +75,41 @@ export const useApp = () => {
 };
 
 const App: React.FC = () => {
-  const [isSyncing, setIsSyncing] = useState(false);
   const [auth, setAuth] = useState<AuthState>(() => {
     const saved = localStorage.getItem('opal_auth');
     return saved ? JSON.parse(saved) : { user: null, token: null, isAuthenticated: false };
   });
 
-  const [resumes, setResumes] = useState<ResumeData[]>([]);
-
-  // Load initial local data
-  useEffect(() => {
+  const [resumes, setResumes] = useState<ResumeData[]>(() => {
     const saved = localStorage.getItem('opal_resumes');
-    if (saved) {
-      setResumes(JSON.parse(saved));
-    }
-  }, []);
+    return saved ? JSON.parse(saved) : INITIAL_CV_LIST;
+  });
 
-  // Persist to local storage whenever state changes
   useEffect(() => {
     localStorage.setItem('opal_auth', JSON.stringify(auth));
   }, [auth]);
 
   useEffect(() => {
     localStorage.setItem('opal_resumes', JSON.stringify(resumes));
-    
-    // Cloud Sync: Push changes to cloud if authenticated
-    if (auth.isAuthenticated && auth.user?.email && !isSyncing) {
-      const timeoutId = setTimeout(async () => {
-        setIsSyncing(true);
-        await syncService.saveResumes(auth.user!.email, resumes);
-        setIsSyncing(false);
-      }, 1000); // Debounce sync
-      return () => clearTimeout(timeoutId);
-    }
-  }, [resumes, auth.isAuthenticated]);
+  }, [resumes]);
 
-  const login = (user: User, token: string, cloudResumes?: ResumeData[]) => {
+  const login = (user: User, token: string) => {
     setAuth({ user, token, isAuthenticated: true });
-    if (cloudResumes) {
-      setResumes(cloudResumes);
-    }
   };
 
   const logout = () => {
     setAuth({ user: null, token: null, isAuthenticated: false });
-    setResumes([]);
-    localStorage.removeItem('opal_resumes');
   };
 
   const saveResume = (resume: ResumeData) => {
     setResumes(prev => {
       const idx = prev.findIndex(r => r.id === resume.id);
-      const now = Date.now();
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = { ...resume, lastModified: now };
+        next[idx] = { ...resume, lastModified: Date.now() };
         return next;
       }
-      return [...prev, { ...resume, lastModified: now }];
+      return [...prev, { ...resume, lastModified: Date.now() }];
     });
   };
 
@@ -93,7 +118,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <AppContext.Provider value={{ auth, login, logout, resumes, saveResume, deleteResume, isSyncing }}>
+    <AppContext.Provider value={{ auth, login, logout, resumes, saveResume, deleteResume }}>
       <Router>
         <div className="min-h-screen bg-slate-50 flex flex-col">
           {auth.isAuthenticated && (
@@ -110,17 +135,7 @@ const App: React.FC = () => {
                       </span>
                     </Link>
                   </div>
-                  <div className="flex items-center space-x-6">
-                    <div className="flex items-center space-x-2 px-3 py-1 bg-slate-50 rounded-full border border-slate-100">
-                      {isSyncing ? (
-                        <RefreshCw className="w-3 h-3 text-indigo-500 animate-spin" />
-                      ) : (
-                        <CloudCheck className="w-3 h-3 text-emerald-500" />
-                      )}
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        {isSyncing ? 'Syncing' : 'Cloud Active'}
-                      </span>
-                    </div>
+                  <div className="flex items-center space-x-4">
                     <div className="hidden md:flex items-center space-x-1 text-slate-500 text-sm">
                       <UserIcon className="w-4 h-4" />
                       <span>{auth.user?.fullName}</span>

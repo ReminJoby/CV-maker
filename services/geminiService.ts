@@ -2,11 +2,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ResumeData } from "../types";
 
-/**
- * Gemini API Initialization
- * We use process.env.API_KEY as the standardized way to access the secret
- * in production environments like Vercel.
- */
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 
 const RESUME_SCHEMA = {
@@ -75,7 +70,7 @@ export const getAIOptimizationTips = async (section: string, text: string) => {
       Content:
       "${text}"`,
       config: {
-        thinkingConfig: { thinkingBudget: 0 },
+        thinkingConfig: { thinkingBudget: 0 }, // Disable thinking for speed
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
@@ -102,7 +97,7 @@ export const parseResumeFromText = async (text: string): Promise<Partial<ResumeD
       model: 'gemini-3-flash-preview',
       contents: `Extract resume data into JSON. If missing, use empty strings/arrays.\nText: """${text}"""`,
       config: {
-        thinkingConfig: { thinkingBudget: 0 },
+        thinkingConfig: { thinkingBudget: 0 }, // Speed up extraction
         responseMimeType: "application/json",
         responseSchema: RESUME_SCHEMA,
       }
@@ -122,21 +117,19 @@ export const parseResumeFromPDF = async (base64PDF: string): Promise<Partial<Res
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: "application/pdf",
-              data: base64PDF
-            }
-          },
-          {
-            text: "Quickly extract resume data from this PDF into the specified JSON format."
+      contents: [
+        {
+          inlineData: {
+            mimeType: "application/pdf",
+            data: base64PDF
           }
-        ]
-      },
+        },
+        {
+          text: "Quickly extract resume data from this PDF into the specified JSON format."
+        }
+      ],
       config: {
-        thinkingConfig: { thinkingBudget: 0 },
+        thinkingConfig: { thinkingBudget: 0 }, // Critical for speed: disable reasoning for extraction
         responseMimeType: "application/json",
         responseSchema: RESUME_SCHEMA,
       }
@@ -166,13 +159,9 @@ export const generateHeroImage = async (prompt: string): Promise<string | null> 
       }
     });
 
-    const candidate = response.candidates?.[0];
-    if (candidate?.content?.parts) {
-      for (const part of candidate.content.parts) {
-        if (part.inlineData) {
-          const base64EncodeString: string = part.inlineData.data;
-          return `data:image/png;base64,${base64EncodeString}`;
-        }
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:image/png;base64,${part.inlineData.data}`;
       }
     }
     return null;
