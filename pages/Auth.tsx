@@ -1,20 +1,70 @@
 
-import React, { useState } from 'react';
-import { Layout, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Layout, Mail, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
 import { useApp } from '../App';
+
+interface StoredUser {
+  id: string;
+  email: string;
+  fullName: string;
+  password: string;
+}
 
 const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const { login } = useApp();
+
+  // Reset error when switching between login and register
+  useEffect(() => {
+    setError(null);
+  }, [isLogin]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate API call
-    const user = { id: 'u1', email, fullName: fullName || 'User' };
-    login(user, 'fake-jwt-token');
+    setError(null);
+
+    // Get existing users from localStorage
+    const storedUsersJson = localStorage.getItem('opal_users');
+    const users: StoredUser[] = storedUsersJson ? JSON.parse(storedUsersJson) : [];
+
+    if (isLogin) {
+      // Login Logic
+      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      
+      if (user && user.password === password) {
+        // Success
+        login({ id: user.id, email: user.email, fullName: user.fullName }, 'mock-jwt-token');
+      } else {
+        // Failure
+        setError("The entered password or email is incorrect. Please try again.");
+      }
+    } else {
+      // Registration Logic
+      const existingUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      
+      if (existingUser) {
+        setError("An account with this email already exists.");
+        return;
+      }
+
+      const newUser: StoredUser = {
+        id: Math.random().toString(36).substring(2, 9),
+        email,
+        fullName: fullName || 'New User',
+        password
+      };
+
+      // Save to "DB"
+      const updatedUsers = [...users, newUser];
+      localStorage.setItem('opal_users', JSON.stringify(updatedUsers));
+
+      // Log in immediately
+      login({ id: newUser.id, email: newUser.email, fullName: newUser.fullName }, 'mock-jwt-token');
+    }
   };
 
   return (
@@ -43,6 +93,15 @@ const Auth: React.FC = () => {
               Register
             </button>
           </div>
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+              <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700 font-medium leading-relaxed">
+                {error}
+              </p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {!isLogin && (
