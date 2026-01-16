@@ -5,13 +5,20 @@
  * by using a public persistent key-value store.
  */
 
-const BUCKET_ID = 'opal_cv_global_v2';
+// Unique bucket ID for fresh deployment
+const BUCKET_ID = 'opal_cv_v4_resilient_sync';
 const BASE_URL = `https://kvdb.io/${BUCKET_ID}/`;
 
-// Helper to obfuscate keys and ensure consistency across devices
+/**
+ * Creates a safe, URL-friendly key from an email
+ */
 const getCloudKey = (email: string) => {
   const normalized = email.trim().toLowerCase();
-  return btoa(normalized).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  // Safe Base64 variant
+  return btoa(normalized)
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
 };
 
 export const syncService = {
@@ -24,7 +31,9 @@ export const syncService = {
     try {
       const response = await fetch(`${BASE_URL}user_${key}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify(payload)
       });
       return response.ok;
@@ -35,17 +44,26 @@ export const syncService = {
   },
 
   /**
-   * Fetches user credentials from the cloud
+   * Fetches user credentials from the cloud with cache busting
    */
   async getUser(email: string) {
     const key = getCloudKey(email);
+    const timestamp = Date.now();
     try {
-      const response = await fetch(`${BASE_URL}user_${key}`, {
-        cache: 'no-store'
+      const response = await fetch(`${BASE_URL}user_${key}?t=${timestamp}`, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
       });
       if (!response.ok) return null;
       const text = await response.text();
-      return JSON.parse(text);
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        return null;
+      }
     } catch (e) {
       console.error('Cloud Retrieval Error (User):', e);
       return null;
@@ -60,7 +78,9 @@ export const syncService = {
     try {
       const response = await fetch(`${BASE_URL}data_${key}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify(resumes)
       });
       return response.ok;
@@ -71,17 +91,26 @@ export const syncService = {
   },
 
   /**
-   * Fetches all resumes from the cloud
+   * Fetches all resumes from the cloud with cache busting
    */
   async getResumes(email: string) {
     const key = getCloudKey(email);
+    const timestamp = Date.now();
     try {
-      const response = await fetch(`${BASE_URL}data_${key}`, {
-        cache: 'no-store'
+      const response = await fetch(`${BASE_URL}data_${key}?t=${timestamp}`, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
       });
       if (!response.ok) return [];
       const text = await response.text();
-      return JSON.parse(text);
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        return [];
+      }
     } catch (e) {
       console.error('Cloud Retrieval Error (Data):', e);
       return [];

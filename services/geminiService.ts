@@ -2,8 +2,12 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ResumeData } from "../types";
 
-// Always use process.env.API_KEY directly for initialization as per guidelines
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+/**
+ * Gemini API Initialization
+ * We use process.env.API_KEY as the standardized way to access the secret
+ * in production environments like Vercel.
+ */
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const RESUME_SCHEMA = {
   type: Type.OBJECT,
@@ -71,7 +75,7 @@ export const getAIOptimizationTips = async (section: string, text: string) => {
       Content:
       "${text}"`,
       config: {
-        thinkingConfig: { thinkingBudget: 0 }, // Disable thinking for speed
+        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
@@ -98,7 +102,7 @@ export const parseResumeFromText = async (text: string): Promise<Partial<ResumeD
       model: 'gemini-3-flash-preview',
       contents: `Extract resume data into JSON. If missing, use empty strings/arrays.\nText: """${text}"""`,
       config: {
-        thinkingConfig: { thinkingBudget: 0 }, // Speed up extraction
+        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: "application/json",
         responseSchema: RESUME_SCHEMA,
       }
@@ -118,7 +122,6 @@ export const parseResumeFromPDF = async (base64PDF: string): Promise<Partial<Res
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      // Multi-part contents must be wrapped in a Content object with a parts array
       contents: {
         parts: [
           {
@@ -133,7 +136,7 @@ export const parseResumeFromPDF = async (base64PDF: string): Promise<Partial<Res
         ]
       },
       config: {
-        thinkingConfig: { thinkingBudget: 0 }, // Critical for speed: disable reasoning for extraction
+        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: "application/json",
         responseSchema: RESUME_SCHEMA,
       }
@@ -163,7 +166,6 @@ export const generateHeroImage = async (prompt: string): Promise<string | null> 
       }
     });
 
-    // Iterate through candidates and parts to find the image part
     const candidate = response.candidates?.[0];
     if (candidate?.content?.parts) {
       for (const part of candidate.content.parts) {
