@@ -8,8 +8,11 @@
 const BUCKET_ID = 'opal_cv_global_v2';
 const BASE_URL = `https://kvdb.io/${BUCKET_ID}/`;
 
-// Helper to obfuscate keys (simple Base64 for demo purposes)
-const getCloudKey = (email: string) => btoa(email.toLowerCase()).replace(/=/g, '');
+// Helper to obfuscate keys and ensure consistency across devices
+const getCloudKey = (email: string) => {
+  const normalized = email.trim().toLowerCase();
+  return btoa(normalized).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+};
 
 export const syncService = {
   /**
@@ -19,11 +22,12 @@ export const syncService = {
     const key = getCloudKey(user.email);
     const payload = { ...user, password, updatedAt: Date.now() };
     try {
-      await fetch(`${BASE_URL}user_${key}`, {
-        method: 'POST',
+      const response = await fetch(`${BASE_URL}user_${key}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      return true;
+      return response.ok;
     } catch (e) {
       console.error('Cloud Sync Error (User):', e);
       return false;
@@ -36,10 +40,14 @@ export const syncService = {
   async getUser(email: string) {
     const key = getCloudKey(email);
     try {
-      const response = await fetch(`${BASE_URL}user_${key}`);
+      const response = await fetch(`${BASE_URL}user_${key}`, {
+        cache: 'no-store'
+      });
       if (!response.ok) return null;
-      return await response.json();
+      const text = await response.text();
+      return JSON.parse(text);
     } catch (e) {
+      console.error('Cloud Retrieval Error (User):', e);
       return null;
     }
   },
@@ -50,11 +58,12 @@ export const syncService = {
   async saveResumes(email: string, resumes: any[]) {
     const key = getCloudKey(email);
     try {
-      await fetch(`${BASE_URL}data_${key}`, {
-        method: 'POST',
+      const response = await fetch(`${BASE_URL}data_${key}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(resumes)
       });
-      return true;
+      return response.ok;
     } catch (e) {
       console.error('Cloud Sync Error (Data):', e);
       return false;
@@ -67,10 +76,14 @@ export const syncService = {
   async getResumes(email: string) {
     const key = getCloudKey(email);
     try {
-      const response = await fetch(`${BASE_URL}data_${key}`);
+      const response = await fetch(`${BASE_URL}data_${key}`, {
+        cache: 'no-store'
+      });
       if (!response.ok) return [];
-      return await response.json();
+      const text = await response.text();
+      return JSON.parse(text);
     } catch (e) {
+      console.error('Cloud Retrieval Error (Data):', e);
       return [];
     }
   }

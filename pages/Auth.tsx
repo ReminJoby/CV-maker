@@ -22,14 +22,19 @@ const Auth: React.FC = () => {
     setError(null);
     setIsLoading(true);
 
+    // Normalize inputs
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+    const cleanName = fullName.trim();
+
     try {
       if (isLogin) {
         // Global Login Logic
-        const cloudUser = await syncService.getUser(email);
+        const cloudUser = await syncService.getUser(cleanEmail);
         
-        if (cloudUser && cloudUser.password === password) {
+        if (cloudUser && cloudUser.password === cleanPassword) {
           // Success: Fetch their cloud resumes too
-          const cloudResumes = await syncService.getResumes(email);
+          const cloudResumes = await syncService.getResumes(cleanEmail);
           login(
             { id: cloudUser.id, email: cloudUser.email, fullName: cloudUser.fullName }, 
             'mock-jwt-token',
@@ -41,7 +46,7 @@ const Auth: React.FC = () => {
         }
       } else {
         // Global Registration Logic
-        const existingUser = await syncService.getUser(email);
+        const existingUser = await syncService.getUser(cleanEmail);
         
         if (existingUser) {
           setError("An account with this email already exists.");
@@ -51,12 +56,12 @@ const Auth: React.FC = () => {
 
         const newUser = {
           id: Math.random().toString(36).substring(2, 9),
-          email: email.toLowerCase(),
-          fullName: fullName || 'New User'
+          email: cleanEmail,
+          fullName: cleanName || 'New User'
         };
 
         // Save to Global Store
-        const success = await syncService.saveUser(newUser, password);
+        const success = await syncService.saveUser(newUser, cleanPassword);
         
         if (success) {
           login(newUser, 'mock-jwt-token', []);
