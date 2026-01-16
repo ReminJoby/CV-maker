@@ -7,7 +7,7 @@ import { ResumeData } from "../types";
  * We use process.env.API_KEY as the standardized way to access the secret
  * in production environments like Vercel.
  */
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 
 const RESUME_SCHEMA = {
   type: Type.OBJECT,
